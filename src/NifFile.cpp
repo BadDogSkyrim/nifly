@@ -177,6 +177,20 @@ void NifFile::Create(const NiVersion& version) {
 	isValid = true;
 }
 
+// PYNIFLY //
+void NifFile::CreateAsFade(const NiVersion& version, std::string name) {
+	Clear();
+	hdr.SetVersion(version);
+	hdr.SetBlockReference(&blocks);
+
+	auto rootNode = std::make_unique<BSFadeNode>();
+	rootNode->name.get() = name;
+	hdr.AddBlock(std::move(rootNode));
+
+	isValid = true;
+}
+// PYNIFLY //
+
 void NifFile::Clear() {
 	isValid = false;
 	hasUnknown = false;

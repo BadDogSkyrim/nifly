@@ -127,6 +127,9 @@ public:
 	// Creates a new file with a root NiNode using the specified version.
 	void Create(const NiVersion& version);
 
+	// Creates a new file with a root BSFadeNode using the specified version
+	void CreateAsFade(const NiVersion& version, std::string name);
+
 	// Deletes all blocks, header strings and resets the valid status.
 	void Clear();
 
