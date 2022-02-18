@@ -27,17 +27,17 @@ float CalcMedianOfFloats(const std::vector<float>& data);
 
 // Vector with 2 float components (uv)
 struct Vector2 {
-	float u;
-	float v;
+	float u = 0.0f;
+	float v = 0.0f;
 
-	Vector2() { u = v = 0.0f; }
+	Vector2() = default;
 	Vector2(float U, float V) {
 		u = U;
 		v = V;
 	}
 
 	bool operator==(const Vector2& other) {
-		return FloatsAreNearlyEqual(u, other.u) && FloatsAreNearlyEqual(v, other.v);
+		return u == other.u && v == other.v;
 	}
 	bool operator!=(const Vector2& other) { return !(*this == other); }
 
@@ -102,13 +102,13 @@ struct Vector3 {
 		, y(Y)
 		, z(Z) {}
 
-	float& operator[](int ind) { return ind ? (ind == 2 ? z : y) : x; }
-	float operator[](int ind) const { return ind ? (ind == 2 ? z : y) : x; }
+	constexpr float& operator[](int ind) { return ind ? (ind == 2 ? z : y) : x; }
+	constexpr float operator[](int ind) const { return ind ? (ind == 2 ? z : y) : x; }
 
 	void Zero() { x = y = z = 0.0f; }
 
 	// With bUseEpsilon, uses nifly::EPSILON for a nearly zero comparison.
-	bool IsZero(bool bUseEpsilon = false) const {
+	constexpr bool IsZero(bool bUseEpsilon = false) const {
 		if (bUseEpsilon) {
 			if (std::fabs(x) < EPSILON && std::fabs(y) < EPSILON && std::fabs(z) < EPSILON)
 				return true;
@@ -123,7 +123,7 @@ struct Vector3 {
 
 	void Normalize() {
 		float d = std::sqrt(x * x + y * y + z * z);
-		if (FloatsAreNearlyEqual(d, 0.0f))
+		if (d == 0.0f)
 			d = 1.0f;
 
 		x /= d;
@@ -131,18 +131,17 @@ struct Vector3 {
 		z /= d;
 	}
 
-	uint32_t hash() {
+	uint32_t hash() const {
 		static_assert(sizeof(float) == sizeof(uint32_t));
-		uint32_t* h = reinterpret_cast<uint32_t*>(this);
+		const uint32_t* h = reinterpret_cast<const uint32_t*>(this);
 		uint32_t f = (h[0] + h[1] * 11 - h[2] * 17) & 0x7fffffff;
 		return (f >> 22) ^ (f >> 12) ^ (f);
 	}
 
-	bool operator==(const Vector3& other) {
-		return FloatsAreNearlyEqual(x, other.x) && FloatsAreNearlyEqual(y, other.y)
-			   && FloatsAreNearlyEqual(z, other.z);
+	constexpr bool operator==(const Vector3& other) const {
+		return x == other.x && y == other.y && z == other.z;
 	}
-	bool operator!=(const Vector3& other) { return !(*this == other); }
+	constexpr bool operator!=(const Vector3& other) const { return !(*this == other); }
 
 	Vector3& operator-=(const Vector3& other) {
 		x -= other.x;
@@ -150,10 +149,8 @@ struct Vector3 {
 		z -= other.z;
 		return (*this);
 	}
-	Vector3 operator-(const Vector3& other) const {
-		Vector3 tmp = (*this);
-		tmp -= other;
-		return tmp;
+	constexpr Vector3 operator-(const Vector3& other) const {
+		return Vector3(x - other.x, y - other.y, z - other.z);
 	}
 	Vector3& operator+=(const Vector3& other) {
 		x += other.x;
@@ -161,32 +158,48 @@ struct Vector3 {
 		z += other.z;
 		return (*this);
 	}
-	Vector3 operator+(const Vector3& other) const {
-		Vector3 tmp = (*this);
-		tmp += other;
-		return tmp;
+	constexpr Vector3 operator+(const Vector3& other) const {
+		return Vector3(x + other.x, y + other.y, z + other.z);
 	}
+	[[deprecated("Replaced by ComponentMultiplyBy; should not have been an operator")]]
 	Vector3& operator*=(const Vector3& other) {
 		x *= other.x;
 		y *= other.y;
 		z *= other.z;
 		return (*this);
 	}
-	Vector3 operator*(const Vector3& other) const {
-		Vector3 tmp = (*this);
-		tmp *= other;
-		return tmp;
+	Vector3& ComponentMultiplyBy(const Vector3& other) {
+		x *= other.x;
+		y *= other.y;
+		z *= other.z;
+		return (*this);
 	}
+	[[deprecated("Replaced by ComponentMultiply; should not have been an operator")]]
+	constexpr Vector3 operator*(const Vector3& other) const {
+		return Vector3(x * other.x, y * other.y, z * other.z);
+	}
+	constexpr Vector3 ComponentMultiply(const Vector3& other) const {
+		return Vector3(x * other.x, y * other.y, z * other.z);
+	}
+	[[deprecated("Replaced by ComponentDivideBy; should not have been an operator")]]
 	Vector3& operator/=(const Vector3& other) {
 		x /= other.x;
 		y /= other.y;
 		z /= other.z;
 		return (*this);
 	}
-	Vector3 operator/(const Vector3& other) const {
-		Vector3 tmp = (*this);
-		tmp /= other;
-		return tmp;
+	Vector3& ComponentDivideBy(const Vector3& other) {
+		x /= other.x;
+		y /= other.y;
+		z /= other.z;
+		return (*this);
+	}
+	[[deprecated("Replaced by ComponentDivide; should not have been an operator")]]
+	constexpr Vector3 operator/(const Vector3& other) const {
+		return Vector3(x / other.x, y / other.y, z / other.z);
+	}
+	constexpr Vector3 ComponentDivide(const Vector3& other) const {
+		return Vector3(x / other.x, y / other.y, z / other.z);
 	}
 
 	Vector3& operator*=(float val) {
@@ -195,10 +208,8 @@ struct Vector3 {
 		z *= val;
 		return (*this);
 	}
-	Vector3 operator*(float val) const {
-		Vector3 tmp = (*this);
-		tmp *= val;
-		return tmp;
+	constexpr Vector3 operator*(float val) const {
+		return Vector3(x * val, y * val, z * val);
 	}
 	Vector3& operator/=(float val) {
 		x /= val;
@@ -206,10 +217,8 @@ struct Vector3 {
 		z /= val;
 		return (*this);
 	}
-	Vector3 operator/(float val) const {
-		Vector3 tmp = (*this);
-		tmp /= val;
-		return tmp;
+	constexpr Vector3 operator/(float val) const {
+		return Vector3(x / val, y / val, z / val);
 	}
 
 	Vector3& operator*=(int val) {
@@ -219,10 +228,9 @@ struct Vector3 {
 		z *= v;
 		return (*this);
 	}
-	Vector3 operator*(int val) const {
-		Vector3 tmp = (*this);
-		tmp *= val;
-		return tmp;
+	constexpr Vector3 operator*(int val) const {
+		float v = static_cast<float>(val);
+		return Vector3(x * v, y * v, z * v);
 	}
 	Vector3& operator/=(int val) {
 		auto v = static_cast<float>(val);
@@ -231,10 +239,9 @@ struct Vector3 {
 		z /= v;
 		return (*this);
 	}
-	Vector3 operator/(int val) const {
-		Vector3 tmp = (*this);
-		tmp /= val;
-		return tmp;
+	constexpr Vector3 operator/(int val) const {
+		float v = static_cast<float>(val);
+		return Vector3(x / v, y / v, z / v);
 	}
 
 	Vector3& operator*=(uint32_t val) {
@@ -244,10 +251,9 @@ struct Vector3 {
 		z *= v;
 		return (*this);
 	}
-	Vector3 operator*(uint32_t val) const {
-		Vector3 tmp = (*this);
-		tmp *= val;
-		return tmp;
+	constexpr Vector3 operator*(uint32_t val) const {
+		float v = static_cast<float>(val);
+		return Vector3(x * v, y * v, z * v);
 	}
 	Vector3& operator/=(uint32_t val) {
 		auto v = static_cast<float>(val);
@@ -256,13 +262,12 @@ struct Vector3 {
 		z /= v;
 		return (*this);
 	}
-	Vector3 operator/(uint32_t val) const {
-		Vector3 tmp = (*this);
-		tmp /= val;
-		return tmp;
+	constexpr Vector3 operator/(uint32_t val) const {
+		float v = static_cast<float>(val);
+		return Vector3(x / v, y / v, z / v);
 	}
 
-	Vector3 cross(const Vector3& other) const {
+	constexpr Vector3 cross(const Vector3& other) const {
 		Vector3 tmp;
 		tmp.x = y * other.z - z * other.y;
 		tmp.y = z * other.x - x * other.z;
@@ -270,7 +275,7 @@ struct Vector3 {
 		return tmp;
 	}
 
-	float dot(const Vector3& other) const { return x * other.x + y * other.y + z * other.z; }
+	constexpr float dot(const Vector3& other) const { return x * other.x + y * other.y + z * other.z; }
 
 	float DistanceTo(const Vector3& target) const {
 		float dx = target.x - x;
@@ -279,7 +284,7 @@ struct Vector3 {
 		return static_cast<float>(std::sqrt(dx * dx + dy * dy + dz * dz));
 	}
 
-	float DistanceSquaredTo(const Vector3& target) {
+	constexpr float DistanceSquaredTo(const Vector3& target) const {
 		float dx = target.x - x;
 		float dy = target.y - y;
 		float dz = target.z - z;
@@ -317,7 +322,7 @@ struct Vector3 {
 			   && FloatsAreNearlyEqual(z, other.z);
 	}
 
-	float length2() const { return x * x + y * y + z * z; }
+	constexpr float length2() const { return x * x + y * y + z * z; }
 
 	float length() const { return std::sqrt(x * x + y * y + z * z); }
 
@@ -333,7 +338,7 @@ struct Vector3 {
 	}
 };
 
-inline Vector3 operator*(float f, const Vector3& v) {
+inline constexpr Vector3 operator*(float f, const Vector3& v) {
 	return Vector3(f * v.x, f * v.y, f * v.z);
 }
 
@@ -356,21 +361,20 @@ struct Vector4 {
 
 // Color with 3 float components (rgb)
 struct Color3 {
-	float r;
-	float g;
-	float b;
+	float r = 0.0f;
+	float g = 0.0f;
+	float b = 0.0f;
 
-	Color3() { r = g = b = 0.0f; }
-	Color3(float r_, float g_, float b_)
+	constexpr Color3() = default;
+	constexpr Color3(float r_, float g_, float b_)
 		: r(r_)
 		, g(g_)
 		, b(b_) {}
 
-	bool operator==(const Color3& other) {
-		return FloatsAreNearlyEqual(r, other.r) && FloatsAreNearlyEqual(g, other.g)
-			   && FloatsAreNearlyEqual(b, other.b);
+	constexpr bool operator==(const Color3& other) {
+		return r == other.r && g == other.g && b == other.b;
 	}
-	bool operator!=(const Color3& other) { return !(*this == other); }
+	constexpr bool operator!=(const Color3& other) { return !(*this == other); }
 
 	Color3& operator*=(float val) {
 		r *= val;
@@ -378,10 +382,8 @@ struct Color3 {
 		b *= val;
 		return *this;
 	}
-	Color3 operator*(float val) const {
-		Color3 tmp = *this;
-		tmp *= val;
-		return tmp;
+	constexpr Color3 operator*(float val) const {
+		return Color3(r * val, g * val, b * val);
 	}
 
 	Color3& operator/=(float val) {
@@ -390,32 +392,29 @@ struct Color3 {
 		b /= val;
 		return *this;
 	}
-	Color3 operator/(float val) const {
-		Color3 tmp = *this;
-		tmp /= val;
-		return tmp;
+	constexpr Color3 operator/(float val) const {
+		return Color3(r / val, g / val, b / val);
 	}
 };
 
 // Color with 4 float components (rgba)
 struct Color4 {
-	float r;
-	float g;
-	float b;
-	float a;
+	float r = 0.0f;
+	float g = 0.0f;
+	float b = 0.0f;
+	float a = 0.0f;
 
-	Color4() { r = g = b = a = 0.0f; }
-	Color4(float r_, float g_, float b_, float a_)
+	constexpr Color4() = default;
+	constexpr Color4(float r_, float g_, float b_, float a_)
 		: r(r_)
 		, g(g_)
 		, b(b_)
 		, a(a_) {}
 
-	bool operator==(const Color4& other) {
-		return FloatsAreNearlyEqual(r, other.r) && FloatsAreNearlyEqual(g, other.g)
-			   && FloatsAreNearlyEqual(b, other.b) && FloatsAreNearlyEqual(a, other.a);
+	constexpr bool operator==(const Color4& other) {
+		return r == other.r && g == other.g && b == other.b && a == other.a;
 	}
-	bool operator!=(const Color4& other) { return !(*this == other); }
+	constexpr bool operator!=(const Color4& other) { return !(*this == other); }
 
 	Color4& operator*=(float val) {
 		r *= val;
@@ -424,10 +423,8 @@ struct Color4 {
 		a *= val;
 		return *this;
 	}
-	Color4 operator*(float val) const {
-		Color4 tmp = *this;
-		tmp *= val;
-		return tmp;
+	constexpr Color4 operator*(float val) const {
+		return Color4(r * val, g * val, b * val, a * val);
 	}
 
 	Color4& operator/=(float val) {
@@ -437,10 +434,8 @@ struct Color4 {
 		a /= val;
 		return *this;
 	}
-	Color4 operator/(float val) const {
-		Color4 tmp = *this;
-		tmp /= val;
-		return tmp;
+	constexpr Color4 operator/(float val) const {
+		return Color4(r / val, g / val, b / val, a / val);
 	}
 };
 
@@ -471,15 +466,21 @@ class Matrix3 {
 	Vector3 rows[3] = {Vector3(1.0f, 0.0f, 0.0f), Vector3(0.0f, 1.0f, 0.0f), Vector3(0.0f, 0.0f, 1.0f)};
 
 public:
-	Vector3& operator[](int index) { return rows[index]; }
+	constexpr Matrix3() {}
+	constexpr Matrix3(const Vector3& r1, const Vector3& r2, const Vector3& r3)
+		: rows{r1, r2, r3} {}
+	constexpr Matrix3(float m00, float m01, float m02, float m10, float m11, float m12, float m20, float m21, float m22)
+		: rows{Vector3(m00, m01, m02), Vector3(m10, m11, m12), Vector3(m20, m21, m22)} {}
 
-	const Vector3& operator[](int index) const { return rows[index]; }
+	constexpr Vector3& operator[](int index) { return rows[index]; }
 
-	bool operator==(const Matrix3& other) {
+	constexpr const Vector3& operator[](int index) const { return rows[index]; }
+
+	constexpr bool operator==(const Matrix3& other) {
 		return rows[0] == other[0] && rows[1] == other[1] && rows[2] == other[2];
 	}
 
-	bool IsIdentity() { return *this == Matrix3(); }
+	constexpr bool IsIdentity() { return *this == Matrix3(); }
 
 	Matrix3& Identity() {
 		//1.0f, 0.0f, 0.0f
@@ -495,30 +496,22 @@ public:
 		return *this;
 	}
 
-	Matrix3 operator+(const Matrix3& other) const {
-		Matrix3 res(*this);
-		res += other;
-		return res;
+	constexpr Matrix3 operator+(const Matrix3& other) const {
+		return Matrix3(rows[0] + other[0], rows[1] + other[1], rows[2] + other[2]);
 	}
 
 	Matrix3& operator+=(const Matrix3& other) {
-		rows[0] += other[0];
-		rows[1] += other[1];
-		rows[2] += other[2];
-		return (*this);
+		*this = *this + other;
+		return *this;
 	}
 
-	Matrix3 operator-(const Matrix3& other) const {
-		Matrix3 res(*this);
-		res -= other;
-		return res;
+	constexpr Matrix3 operator-(const Matrix3& other) const {
+		return Matrix3(rows[0] - other[0], rows[1] - other[1], rows[2] - other[2]);
 	}
 
 	Matrix3& operator-=(const Matrix3& other) {
-		rows[0] -= other[0];
-		rows[1] -= other[1];
-		rows[2] -= other[2];
-		return (*this);
+		*this = *this - other;
+		return *this;
 	}
 
 	Matrix3& operator*=(const Matrix3& other) {
@@ -526,7 +519,7 @@ public:
 		return *this;
 	}
 
-	Matrix3 operator*(const Matrix3& o) const {
+	constexpr Matrix3 operator*(const Matrix3& o) const {
 		Matrix3 res;
 		res[0][0] = rows[0][0] * o[0][0] + rows[0][1] * o[1][0] + rows[0][2] * o[2][0];
 		res[0][1] = rows[0][0] * o[0][1] + rows[0][1] * o[1][1] + rows[0][2] * o[2][1];
@@ -540,19 +533,20 @@ public:
 		return res;
 	}
 
-	Vector3 operator*(const Vector3& v) const {
+	constexpr Vector3 operator*(const Vector3& v) const {
 		return Vector3(rows[0][0] * v.x + rows[0][1] * v.y + rows[0][2] * v.z,
 					   rows[1][0] * v.x + rows[1][1] * v.y + rows[1][2] * v.z,
 					   rows[2][0] * v.x + rows[2][1] * v.y + rows[2][2] * v.z);
 	}
 
-	Vector3 operator*(const float f) const {
+	[[deprecated("Should not have been an operator; replace with multiplying by Vector3(f,f,f)")]]
+	constexpr Vector3 operator*(const float f) const {
 		return Vector3(rows[0][0] * f + rows[0][1] * f + rows[0][2] * f,
 					   rows[1][0] * f + rows[1][1] * f + rows[1][2] * f,
 					   rows[2][0] * f + rows[2][1] * f + rows[2][2] * f);
 	}
 
-	Matrix3 Transpose() const {
+	constexpr Matrix3 Transpose() const {
 		Matrix3 res;
 		res[0][0] = rows[0][0];
 		res[0][1] = rows[1][0];
@@ -626,7 +620,7 @@ class Matrix4 {
 	float m[16]{};
 
 public:
-	Matrix4() { Identity(); }
+	constexpr Matrix4(): m{1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f} {}
 
 	Matrix4(const std::vector<Vector3>& mat33) { Set(mat33); }
 
@@ -674,7 +668,8 @@ public:
 		m[row * 4 + 2] = inVec.z;
 	}
 
-	float& operator[](int index) { return m[index]; }
+	constexpr float& operator[](int index) { return m[index]; }
+	constexpr float operator[](int index) const { return m[index]; }
 
 	bool operator==(const Matrix4& other) { return (std::equal(m, m + sizeof m / sizeof *m, other.m)); }
 
@@ -778,9 +773,10 @@ public:
 				- (t[2] * t[4] * t[6] + t[1] * t[3] * t[8] + t[0] * t[5] * t[7]));
 	}
 
-	Matrix4 operator+(const Matrix4& other) const {
+	constexpr Matrix4 operator+(const Matrix4& other) const {
 		Matrix4 t(*this);
-		t += other;
+		for (int i = 0; i < 16; i++)
+			t[i] += other[i];
 		return t;
 	}
 	Matrix4& operator+=(const Matrix4& other) {
@@ -789,9 +785,10 @@ public:
 
 		return (*this);
 	}
-	Matrix4 operator-(const Matrix4& other) const {
+	constexpr Matrix4 operator-(const Matrix4& other) const {
 		Matrix4 t(*this);
-		t -= other;
+		for (int i = 0; i < 16; i++)
+			t[i] -= other[i];
 		return t;
 	}
 	Matrix4& operator-=(const Matrix4& other) {
@@ -800,7 +797,7 @@ public:
 
 		return (*this);
 	}
-	Vector3 operator*(const Vector3& v) const {
+	constexpr Vector3 operator*(const Vector3& v) const {
 		return Vector3(m[0] * v.x + m[1] * v.y + m[2] * v.z + m[3],
 					   m[4] * v.x + m[5] * v.y + m[6] * v.z + m[7],
 					   m[8] * v.x + m[9] * v.y + m[10] * v.z + m[11]);
@@ -825,7 +822,7 @@ public:
 		t *= other;
 		return t;
 	}
-	Matrix4 operator*(float val) {
+	constexpr Matrix4 operator*(float val) {
 		Matrix4 t(*this);
 		for (int i = 0; i < 16; i++)
 			t[i] *= val;
@@ -928,9 +925,9 @@ struct BoundingSphere {
 	Vector3 center;
 	float radius = 0.0f;
 
-	BoundingSphere() {}
+	constexpr BoundingSphere() {}
 
-	BoundingSphere(const Vector3& center_, const float radius_)
+	constexpr BoundingSphere(const Vector3& center_, const float radius_)
 		: center(center_)
 		, radius(radius_) {}
 
@@ -946,14 +943,13 @@ struct Quaternion {
 	float y;
 	float z;
 
-	Quaternion() {
-		w = 1.0f;
-		x = 0.0f;
-		y = 0.0f;
-		z = 0.0f;
-	}
+	constexpr Quaternion()
+		: w(1.0f)
+		, x(0.0f)
+		, y(0.0f)
+		, z(0.0f) {}
 
-	Quaternion(float w_, float x_, float y_, float z_)
+	constexpr Quaternion(float w_, float x_, float y_, float z_)
 		: w(w_)
 		, x(x_)
 		, y(y_)
@@ -967,14 +963,13 @@ struct QuaternionXYZW {
 	float z;
 	float w;
 
-	QuaternionXYZW() {
-		x = 0.0f;
-		y = 0.0f;
-		z = 0.0f;
-		w = 1.0f;
-	}
+	constexpr QuaternionXYZW()
+		: x(0.0f)
+		, y(0.0f)
+		, z(0.0f)
+		, w(1.0f) {}
 
-	QuaternionXYZW(float x_, float y_, float z_, float w_)
+	constexpr QuaternionXYZW(float x_, float y_, float z_, float w_)
 		: x(x_)
 		, y(y_)
 		, z(z_)
@@ -1023,7 +1018,7 @@ struct MatTransform {
 	bool ToEulerDegrees(float& y, float& p, float& r) const { return rotation.ToEulerDegrees(y, p, r); }
 
 	// Full matrix of translation, rotation and scale
-	Matrix4 ToMatrix() const {
+	constexpr Matrix4 ToMatrix() const {
 		Matrix4 mat;
 		mat[0] = rotation[0].x * scale;
 		mat[1] = rotation[0].y * scale;
@@ -1040,12 +1035,58 @@ struct MatTransform {
 		return mat;
 	}
 
-	Vector3 GetVector() const { return translation + rotation * scale; }
+	// ToGLMMatrix: turns this transform into a glm::mat4x4.  This is
+	// basically the same as ToMatrix above, except glm::mat4x4 stores its
+	// data in column-major form instead of row-major like everything else.
+	// To call, do xform.ToGLMMatrix<glm::mat4x4>();
+	template<typename Mat>
+	constexpr Mat ToGLMMatrix() const {
+		Mat m;
+		m[0][0] = rotation[0][0] * scale;
+		m[0][1] = rotation[1][0] * scale;
+		m[0][2] = rotation[2][0] * scale;
+		m[0][3] = 0.0f;
+		m[1][0] = rotation[0][1] * scale;
+		m[1][1] = rotation[1][1] * scale;
+		m[1][2] = rotation[2][1] * scale;
+		m[1][3] = 0.0f;
+		m[2][0] = rotation[0][2] * scale;
+		m[2][1] = rotation[1][2] * scale;
+		m[2][2] = rotation[2][2] * scale;
+		m[2][3] = 0.0f;
+		m[3][0] = translation.x;
+		m[3][1] = translation.y;
+		m[3][2] = translation.z;
+		m[3][3] = 1.0f;
+		return m;
+	}
 
-	// ApplyTransform applies this MatTransform to a vector v by first
-	// scaling v, then rotating the result of that, then translating the
-	// result of that.
-	Vector3 ApplyTransform(const Vector3& v) const;
+	[[deprecated("Does something nonsensical")]]
+	Vector3 GetVector() const { return translation + rotation * Vector3(scale, scale, scale); }
+
+	// ApplyTransform applies this MatTransform to a position vector v by
+	// first scaling v, then rotating the result of that, and then
+	// translating the result of that.
+	constexpr Vector3 ApplyTransform(const Vector3& pos) const {
+		return translation + rotation * (pos * scale);
+	}
+
+	// ApplyTransformToDiff applies this transform to a position difference
+	// (or offset) vector.
+	constexpr Vector3 ApplyTransformToDiff(const Vector3& diff) const {
+		return rotation * (diff * scale);
+	}
+
+	// ApplyTransformToDir applies this transform to a direction unit
+	// vector or normal.
+	constexpr Vector3 ApplyTransformToDir(const Vector3& dir) const {
+		return rotation * dir;
+	}
+
+	// ApplyTransformToDist applies this transform to a distance.
+	constexpr float ApplyTransformToDist(float d) const {
+		return scale * d;
+	}
 
 	// Note that InverseTransform will return garbage if "rotation"
 	// is not invertible or scale is 0.
@@ -1071,13 +1112,10 @@ struct Edge {
 	uint16_t p1;
 	uint16_t p2;
 
-	Edge() { p1 = p2 = 0; }
-	Edge(uint16_t P1, uint16_t P2) {
-		p1 = P1;
-		p2 = P2;
-	}
+	constexpr Edge(): p1(0), p2(0) {}
+	constexpr Edge(uint16_t P1, uint16_t P2): p1(P1), p2(P2) {}
 
-	bool CompareIndices(const Edge& o) { return (p1 == o.p1 && p2 == o.p2) || (p1 == o.p2 && p2 == o.p1); }
+	constexpr bool CompareIndices(const Edge& o) { return (p1 == o.p1 && p2 == o.p2) || (p1 == o.p2 && p2 == o.p1); }
 };
 
 // Triangle with uint16_t point indices
@@ -1086,12 +1124,8 @@ struct Triangle {
 	uint16_t p2;
 	uint16_t p3;
 
-	Triangle() { p1 = p2 = p3 = 0; }
-	Triangle(uint16_t P1, uint16_t P2, uint16_t P3) {
-		p1 = P1;
-		p2 = P2;
-		p3 = P3;
-	}
+	constexpr Triangle(): p1(0), p2(0), p3(0) {}
+	constexpr Triangle(uint16_t P1, uint16_t P2, uint16_t P3): p1(P1), p2(P2), p3(P3) {}
 
 	void set(uint16_t P1, uint16_t P2, uint16_t P3) {
 		p1 = P1;
@@ -1099,7 +1133,7 @@ struct Triangle {
 		p3 = P3;
 	}
 
-	void trinormal(Vector3* vertref, Vector3* outNormal) const {
+	void trinormal(const Vector3* vertref, Vector3* outNormal) const {
 		outNormal->x = (vertref[p2].y - vertref[p1].y) * (vertref[p3].z - vertref[p1].z)
 					   - (vertref[p2].z - vertref[p1].z) * (vertref[p3].y - vertref[p1].y);
 		outNormal->y = (vertref[p2].z - vertref[p1].z) * (vertref[p3].x - vertref[p1].x)
@@ -1117,20 +1151,33 @@ struct Triangle {
 					   - (vertref[p2].y - vertref[p1].y) * (vertref[p3].x - vertref[p1].x);
 	}
 
-	void midpoint(Vector3* vertref, Vector3& outPoint) {
+	void midpoint(const Vector3* vertref, Vector3& outPoint) {
 		outPoint = vertref[p1];
 		outPoint += vertref[p2];
 		outPoint += vertref[p3];
 		outPoint /= 3;
 	}
 
-	float AxisMidPointY(Vector3* vertref) { return (vertref[p1].y + vertref[p2].y + vertref[p3].y) / 3.0f; }
+	float AxisMidPointY(const Vector3* vertref) const { return (vertref[p1].y + vertref[p2].y + vertref[p3].y) / 3.0f; }
 
-	float AxisMidPointX(Vector3* vertref) { return (vertref[p1].x + vertref[p2].x + vertref[p3].x) / 3.0f; }
+	float AxisMidPointX(const Vector3* vertref) const { return (vertref[p1].x + vertref[p2].x + vertref[p3].x) / 3.0f; }
 
-	float AxisMidPointZ(Vector3* vertref) { return (vertref[p1].z + vertref[p2].z + vertref[p3].z) / 3.0f; }
+	float AxisMidPointZ(const Vector3* vertref) const { return (vertref[p1].z + vertref[p2].z + vertref[p3].z) / 3.0f; }
 
-	bool HasOrientedEdge(const Edge& e) const {
+	constexpr Edge GetEdge(int i) const {
+		if (i == 0)
+			return Edge(p1, p2);
+		else if (i == 1)
+			return Edge(p2, p3);
+		else
+			return Edge(p3, p1);
+	}
+
+	constexpr bool HasVertex(uint16_t p) const {
+		return p == p1 || p == p2 || p == p3;
+	}
+
+	constexpr bool HasOrientedEdge(const Edge& e) const {
 		return (e.p1 == p1 && e.p2 == p2) || (e.p1 == p2 && e.p2 == p3) || (e.p1 == p3 && e.p2 == p1);
 	}
 
@@ -1145,9 +1192,21 @@ struct Triangle {
 		return Edge(p3, p1);
 	}
 
-	bool IntersectRay(Vector3* vertref,
-					  Vector3& origin,
-					  Vector3& direction,
+	uint16_t ClosestVertex(const Vector3* vertref, const Vector3& p) const {
+		float d1 = p.DistanceTo(vertref[p1]);
+		float d2 = p.DistanceTo(vertref[p2]);
+		float d3 = p.DistanceTo(vertref[p3]);
+		if (d1 <= d2 && d1 <= d3)
+			return p1;
+		else if (d2 <= d3)
+			return p2;
+		else
+			return p3;
+	}
+
+	bool IntersectRay(const Vector3* vertref,
+					  const Vector3& origin,
+					  const Vector3& direction,
 					  float* outDistance = nullptr,
 					  Vector3* worldPos = nullptr) {
 		Vector3 c0(vertref[p1].x, vertref[p1].y, vertref[p1].z);
@@ -1161,7 +1220,7 @@ struct Triangle {
 		Vector3 pvec = direction.cross(e2);
 		float det = e1.dot(pvec);
 
-		if (det < 0.000001f)
+		if (det <= 0.0f)
 			return false;
 
 		Vector3 tvec = origin - c0;
@@ -1191,7 +1250,7 @@ struct Triangle {
 	// Triangle/Sphere collision psuedocode by Christer Ericson: http://realtimecollisiondetection.net/blog/?p=103
 	//   separating axis test on seven features --  3 points, 3 edges, and the tri plane.  For a sphere, this
 	//   involves finding the minimum distance to each feature from the sphere origin and comparing it to the sphere radius.
-	bool IntersectSphere(Vector3* vertref, Vector3& origin, float radius, float* outDistance = nullptr) {
+	bool IntersectSphere(const Vector3* vertref, const Vector3& origin, float radius, float* outDistance = nullptr) {
 		//A = A - P
 		//B = B - P
 		//C = C - P
@@ -1296,7 +1355,7 @@ struct Triangle {
 	uint16_t& operator[](int ind) { return ind ? (ind == 2 ? p3 : p2) : p1; }
 	const uint16_t& operator[](int ind) const { return ind ? (ind == 2 ? p3 : p2) : p1; }
 
-	bool operator<(const Triangle& other) const {
+	constexpr bool operator<(const Triangle& other) const {
 		int d = 0;
 		if (d == 0)
 			d = p1 - other.p1;
@@ -1307,11 +1366,11 @@ struct Triangle {
 		return d < 0;
 	}
 
-	bool operator==(const Triangle& other) const {
+	constexpr bool operator==(const Triangle& other) const {
 		return (p1 == other.p1 && p2 == other.p2 && p3 == other.p3);
 	}
 
-	bool CompareIndices(const Triangle& other) const {
+	constexpr bool CompareIndices(const Triangle& other) const {
 		return ((p1 == other.p1 || p1 == other.p2 || p1 == other.p3)
 				&& (p2 == other.p1 || p2 == other.p2 || p2 == other.p3)
 				&& (p3 == other.p1 || p3 == other.p2 || p3 == other.p3));
@@ -1327,7 +1386,7 @@ struct Triangle {
 	}
 };
 
-inline bool operator==(const Edge& t1, const Edge& t2) {
+inline constexpr bool operator==(const Edge& t1, const Edge& t2) {
 	return ((t1.p1 == t2.p1) && (t1.p2 == t2.p2));
 }
 
@@ -1484,7 +1543,7 @@ using namespace nifly;
 template<>
 struct hash<Edge> {
 	std::size_t operator()(const Edge& t) const {
-		return static_cast<size_t>((t.p2 << 16) | (t.p1 & 0xFFFF));
+		return (static_cast<size_t>(t.p2) << 16) | (t.p1 & 0xFFFF);
 	}
 };
 
