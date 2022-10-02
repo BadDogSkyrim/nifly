@@ -217,7 +217,15 @@ public:
 	// Block type needs a "name" member (like blocks based on NiObjectNET).
 	// Returns block in the correct type or nullptr.
 	template<class T = NiObject>
-	T* FindBlockByName(const std::string& name) const;
+	T* FindBlockByName(const std::string& name) const {
+		for (auto& block : blocks) {
+			auto namedBlock = dynamic_cast<T*>(block.get());
+			if (namedBlock && namedBlock->name == name)
+				return namedBlock;
+		}
+
+		return nullptr;
+	}
 
 	// Returns index of a block in the blocks array or NIF_NPOS
 	uint32_t GetBlockID(NiObject* block) const;
@@ -501,6 +509,8 @@ public:
 	void SetVertsForShape(NiShape* shape, const std::vector<Vector3>& verts);
 	// Sets vertex texture coordinates (UVs) of the shape. Size needs to match the current vertex count.
 	void SetUvsForShape(NiShape* shape, const std::vector<Vector2>& uvs);
+	// Sets vertex colors of the shape. Size needs to match the current vertex count.
+	void SetColorsForShape(NiShape* shape, const std::vector<Color4>& colors);
 	// Sets vertex colors of the shape. Size needs to match the current vertex count.
 	void SetColorsForShape(const std::string& shapeName, const std::vector<Color4>& colors);
 	// Sets vertex tangents of the shape. Size needs to match the current vertex count.

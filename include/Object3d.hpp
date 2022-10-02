@@ -267,6 +267,29 @@ struct Vector3 {
 		return Vector3(x / v, y / v, z / v);
 	}
 
+	Vector3& operator*=(uint64_t val) {
+		auto v = static_cast<float>(val);
+		x *= v;
+		y *= v;
+		z *= v;
+		return (*this);
+	}
+	constexpr Vector3 operator*(uint64_t val) const {
+		float v = static_cast<float>(val);
+		return Vector3(x * v, y * v, z * v);
+	}
+	Vector3& operator/=(uint64_t val) {
+		auto v = static_cast<float>(val);
+		x /= v;
+		y /= v;
+		z /= v;
+		return (*this);
+	}
+	constexpr Vector3 operator/(uint64_t val) const {
+		float v = static_cast<float>(val);
+		return Vector3(x / v, y / v, z / v);
+	}
+
 	constexpr Vector3 cross(const Vector3& other) const {
 		Vector3 tmp;
 		tmp.x = y * other.z - z * other.y;
@@ -539,11 +562,20 @@ public:
 					   rows[2][0] * v.x + rows[2][1] * v.y + rows[2][2] * v.z);
 	}
 
-	[[deprecated("Should not have been an operator; replace with multiplying by Vector3(f,f,f)")]]
-	constexpr Vector3 operator*(const float f) const {
-		return Vector3(rows[0][0] * f + rows[0][1] * f + rows[0][2] * f,
-					   rows[1][0] * f + rows[1][1] * f + rows[1][2] * f,
-					   rows[2][0] * f + rows[2][1] * f + rows[2][2] * f);
+	constexpr Matrix3 operator*(float f) const {
+		return Matrix3(rows[0] * f, rows[1] * f, rows[2] * f);
+	}
+
+	Matrix3& operator*=(float f) {
+		return *this = *this * f;
+	}
+
+	constexpr Matrix3 operator/(float f) const {
+		return Matrix3(rows[0] / f, rows[1] / f, rows[2] / f);
+	}
+
+	Matrix3& operator/=(float f) {
+		return *this = *this / f;
 	}
 
 	constexpr Matrix3 Transpose() const {
@@ -1134,21 +1166,19 @@ struct Triangle {
 	}
 
 	void trinormal(const Vector3* vertref, Vector3* outNormal) const {
-		outNormal->x = (vertref[p2].y - vertref[p1].y) * (vertref[p3].z - vertref[p1].z)
-					   - (vertref[p2].z - vertref[p1].z) * (vertref[p3].y - vertref[p1].y);
-		outNormal->y = (vertref[p2].z - vertref[p1].z) * (vertref[p3].x - vertref[p1].x)
-					   - (vertref[p2].x - vertref[p1].x) * (vertref[p3].z - vertref[p1].z);
-		outNormal->z = (vertref[p2].x - vertref[p1].x) * (vertref[p3].y - vertref[p1].y)
-					   - (vertref[p2].y - vertref[p1].y) * (vertref[p3].x - vertref[p1].x);
+		*outNormal = trinormal(vertref);
 	}
 
 	void trinormal(const std::vector<Vector3>& vertref, Vector3* outNormal) const {
-		outNormal->x = (vertref[p2].y - vertref[p1].y) * (vertref[p3].z - vertref[p1].z)
-					   - (vertref[p2].z - vertref[p1].z) * (vertref[p3].y - vertref[p1].y);
-		outNormal->y = (vertref[p2].z - vertref[p1].z) * (vertref[p3].x - vertref[p1].x)
-					   - (vertref[p2].x - vertref[p1].x) * (vertref[p3].z - vertref[p1].z);
-		outNormal->z = (vertref[p2].x - vertref[p1].x) * (vertref[p3].y - vertref[p1].y)
-					   - (vertref[p2].y - vertref[p1].y) * (vertref[p3].x - vertref[p1].x);
+		*outNormal = trinormal(&vertref[0]);
+	}
+
+	Vector3 trinormal(const Vector3* vertref) const {
+		return (vertref[p2] - vertref[p1]).cross(vertref[p3] - vertref[p1]);
+	}
+
+	Vector3 trinormal(const std::vector<Vector3>& vertref) const {
+		return trinormal(&vertref[0]);
 	}
 
 	void midpoint(const Vector3* vertref, Vector3& outPoint) {
@@ -1202,6 +1232,25 @@ struct Triangle {
 			return p2;
 		else
 			return p3;
+	}
+
+	float DistanceToPoint(const Vector3* vertref, const Vector3& p) const {
+		// Let pp be the projection of p onto the triangle's plane.
+		// If pp is to the right of edge 1, then pp (and therefore p) is
+		// closest to edge 1.  The same for edge 2 and edge 3.  Otherwise,
+		// pp is inside the triangle.
+		const Vector3& v1 = vertref[p1];
+		const Vector3& v2 = vertref[p2];
+		const Vector3& v3 = vertref[p3];
+		Vector3 n = trinormal(vertref);
+		if ((p - v1).dot((v2 - v1).cross(n)) >= 0)
+			return p.DistanceToSegment(v1, v2);
+		if ((p - v2).dot((v3 - v2).cross(n)) >= 0)
+			return p.DistanceToSegment(v2, v3);
+		if ((p - v3).dot((v1 - v3).cross(n)) >= 0)
+			return p.DistanceToSegment(v3, v1);
+		n.Normalize();
+		return std::fabs((p - v1).dot(n));
 	}
 
 	bool IntersectRay(const Vector3* vertref,
@@ -1344,6 +1393,11 @@ struct Triangle {
 		if (sep5 | sep6 | sep7)
 			return false;
 
+		// Note that this calculation of outDistance does not give the
+		// distance from the triangle to the point "origin"; it gives
+		// the distance from "origin" to the nearest vertex of the triangle.
+		// If you want the distance from the triangle to "origin",
+		// Triangle::DistanceToPoint may be a better choice.
 		if (outDistance)
 			(*outDistance) = std::min({vertref[p1].DistanceTo(origin),
 									   vertref[p2].DistanceTo(origin),

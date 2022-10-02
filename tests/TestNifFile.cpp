@@ -66,6 +66,28 @@ TEST_CASE("Load and save static file (FO4)", "[NifFile]") {
 	REQUIRE(CompareBinaryFiles(fileOutput, fileExpected));
 }
 
+TEST_CASE("Load and save static file (FO4, Version 132)", "[NifFile]") {
+	constexpr auto fileName = "TestNifFile_Static_FO4_132";
+	const auto [fileInput, fileOutput, fileExpected] = GetNifFileTuple(fileName);
+
+	NifFile nif;
+	REQUIRE(nif.Load(fileInput) == 0);
+	REQUIRE(nif.Save(fileOutput) == 0);
+
+	REQUIRE(CompareBinaryFiles(fileOutput, fileExpected));
+}
+
+TEST_CASE("Load and save static file (FO4, Version 139)", "[NifFile]") {
+	constexpr auto fileName = "TestNifFile_Static_FO4_139";
+	const auto [fileInput, fileOutput, fileExpected] = GetNifFileTuple(fileName);
+
+	NifFile nif;
+	REQUIRE(nif.Load(fileInput) == 0);
+	REQUIRE(nif.Save(fileOutput) == 0);
+
+	REQUIRE(CompareBinaryFiles(fileOutput, fileExpected));
+}
+
 TEST_CASE("Load and save skinned file (OB)", "[NifFile]") {
 	constexpr auto fileName = "TestNifFile_Skinned_OB";
 	const auto [fileInput, fileOutput, fileExpected] = GetNifFileTuple(fileName);
@@ -236,6 +258,28 @@ TEST_CASE("Load, optimize (SE to LE, dynamic) and save file", "[NifFile]") {
 	NifFile nif;
 	REQUIRE(nif.Load(fileInput) == 0);
 	nif.OptimizeFor(options);
+	REQUIRE(nif.Save(fileOutput) == 0);
+
+	REQUIRE(CompareBinaryFiles(fileOutput, fileExpected));
+}
+
+TEST_CASE("Load and save file with non-zero index root node", "[NifFile]") {
+	constexpr auto fileName = "TestNifFile_RootNonZero";
+	const auto [fileInput, fileOutput, fileExpected] = GetNifFileTuple(fileName);
+
+	NifFile nif;
+	REQUIRE(nif.Load(fileInput) == 0);
+	REQUIRE(nif.Save(fileOutput) == 0);
+
+	REQUIRE(CompareBinaryFiles(fileOutput, fileExpected));
+}
+
+TEST_CASE("Load and save file (FO76)", "[NifFile]") {
+	constexpr auto fileName = "TestNifFile_FO76";
+	const auto [fileInput, fileOutput, fileExpected] = GetNifFileTuple(fileName);
+
+	NifFile nif;
+	REQUIRE(nif.Load(fileInput) == 0);
 	REQUIRE(nif.Save(fileOutput) == 0);
 
 	REQUIRE(CompareBinaryFiles(fileOutput, fileExpected));

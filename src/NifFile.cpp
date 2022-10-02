@@ -16,17 +16,6 @@ See the included GPLv3 LICENSE file
 
 using namespace nifly;
 
-template<class T>
-T* NifFile::FindBlockByName(const std::string& name) const {
-	for (auto& block : blocks) {
-		auto namedBlock = dynamic_cast<T*>(block.get());
-		if (namedBlock && namedBlock->name == name)
-			return namedBlock;
-	}
-
-	return nullptr;
-}
-
 uint32_t NifFile::GetBlockID(NiObject* block) const {
 	auto it = find_if(blocks, [&block](const auto& ptr) { return ptr.get() == block; });
 
@@ -211,7 +200,7 @@ int NifFile::Load(std::istream& file, const NifLoadOptions& options) {
 	isTerrain = options.isTerrain;
 
 	if (file) {
-		NiIStream stream(&file);
+		NiIStream stream(&file, &hdr);
 		hdr.Get(stream);
 
 		if (!hdr.IsValid()) {
@@ -219,8 +208,8 @@ int NifFile::Load(std::istream& file, const NifLoadOptions& options) {
 			return 1;
 		}
 
-		NiVersion& version = stream.GetVersion();
-		if (!(version.IsOB() || version.IsFO3() || version.IsSK() || version.IsSSE() || version.IsFO4() || version.IsSpecial())) {
+		NiVersion& version = hdr.GetVersion();
+		if (!(version.IsOB() || version.IsFO3() || version.IsSK() || version.IsSSE() || version.IsFO4() || version.IsFO76() || version.IsSpecial())) {
 			// Unsupported file version
 			Clear();
 			return 2;
@@ -314,16 +303,16 @@ void NifFile::SetSortIndices(uint32_t refIndex, SortState& sortState) {
 	if (!obj)
 		return;
 
-	bool fullySorted = false;
+	bool fullySorted = sortState.visitedIndices.count(refIndex) > 0;
 
-	auto collision = dynamic_cast<NiCollisionObject*>(obj);
-	if (collision) {
-		SortCollision(collision, refIndex, sortState);
-		fullySorted = true;
-	}
-	else {
-		// Assign new sort index
-		if (sortState.visitedIndices.count(refIndex) == 0) {
+	if (!fullySorted) {
+		auto collision = dynamic_cast<NiCollisionObject*>(obj);
+		if (collision) {
+			SortCollision(collision, refIndex, sortState);
+			fullySorted = true;
+		}
+		else {
+			// Assign new sort index
 			sortState.newIndices[refIndex] = sortState.newIndex++;
 			sortState.visitedIndices.insert(refIndex);
 		}
@@ -662,10 +651,15 @@ void NifFile::PrettySortBlocks() {
 	for (size_t i = 0; i < sortState.newIndices.size(); i++)
 		sortState.newIndices[i] = static_cast<uint32_t>(i);
 
-	auto root = GetRootNode();
-	if (root) {
-		sortState.newIndex = GetBlockID(root);
-		SetSortIndices(sortState.newIndex, sortState);
+	if (sortState.newIndices.empty())
+		return;
+
+	for (auto& node : GetNodes()) {
+		auto parentNode = GetParentNode(node);
+		if (!parentNode) {
+			// No parent, node is at the root level
+			SetSortIndices(GetBlockID(node), sortState);
+		}
 	}
 
 	for (size_t i = 0; i < sortState.newIndices.size(); i++) {
@@ -1063,37 +1057,28 @@ void NifFile::SetTextureSlot(NiShape* shape, std::string& inTexFile, uint32_t te
 
 void NifFile::TrimTexturePaths() {
 	auto fTrimPath = [&hdr = hdr, &isTerrain = isTerrain](std::string& tex) -> std::string& {
-		if (!tex.empty()) {
-			// Replace multiple slashes or forward slashes with one backslash
-			tex = std::regex_replace(tex, std::regex("/+|\\\\+"), "\\");
+		if (tex.empty())
+			return tex;
 
-			// Remove everything before the first occurence of "\textures\"
+		// Replace multiple slashes or forward slashes with one backslash
+		tex = std::regex_replace(tex, std::regex("/+|\\\\+"), "\\");
+
+		// Remove everything before the first occurence of "\textures\"
+		tex = std::regex_replace(tex, std::regex(R"(^(.*?)\\textures\\)", std::regex_constants::icase), "");
+
+		// Remove all backslashes from the front
+		tex = std::regex_replace(tex, std::regex("^\\\\+"), "");
+
+		if (!hdr.GetVersion().IsOB() && !hdr.GetVersion().IsSpecial() && is_relative_path(tex)) {
+			// If the path doesn't start with "textures\", add it to the front
 			tex = std::regex_replace(tex,
-									 std::regex(R"(^(.*?)\\textures\\)", std::regex_constants::icase),
-									 "");
+									 std::regex("^(?!^textures\\\\)", std::regex_constants::icase),
+									 "textures\\");
+		}
 
-			// Remove all backslashes from the front
-			tex = std::regex_replace(tex, std::regex("^\\\\+"), "");
-
-			if (!hdr.GetVersion().IsOB() && !hdr.GetVersion().IsSpecial()) {
-				std::filesystem::path texPath(tex);
-				if (texPath.is_relative()) {
-					// If the path doesn't start with "textures\", add it to the front
-					tex = std::regex_replace(tex,
-											 std::regex("^(?!^textures\\\\)", std::regex_constants::icase),
-											 "textures\\");
-				}
-			}
-
-			// If the path doesn't start with "Data\", add it to the front
-			if (isTerrain) {
-				std::filesystem::path texPath(tex);
-				if (texPath.is_relative()) {
-					tex = std::regex_replace(tex,
-											 std::regex("^(?!^Data\\\\)", std::regex_constants::icase),
-											 "Data\\");
-				}
-			}
+		// If the path doesn't start with "Data\", add it to the front
+		if (isTerrain && is_relative_path(tex)) {
+			tex = std::regex_replace(tex, std::regex("^(?!^Data\\\\)", std::regex_constants::icase), "Data\\");
 		}
 		return tex;
 	};
@@ -1355,10 +1340,7 @@ int NifFile::Save(const std::filesystem::path& fileName, const NifSaveOptions& o
 
 int NifFile::Save(std::ostream& file, const NifSaveOptions& options) {
 	if (file) {
-		if (hdr.GetVersion().IsFO76())
-			return 76;
-
-		NiOStream stream(&file, hdr.GetVersion());
+		NiOStream stream(&file, &hdr);
 		FinalizeData();
 
 		if (options.optimize)
@@ -3282,8 +3264,7 @@ void NifFile::SetUvsForShape(NiShape* shape, const std::vector<Vector2>& uvs) {
 	}
 }
 
-void NifFile::SetColorsForShape(const std::string& shapeName, const std::vector<Color4>& colors) {
-	auto shape = FindBlockByName<NiShape>(shapeName);
+void NifFile::SetColorsForShape(NiShape* shape, const std::vector<Color4>& colors) {
 	if (!shape)
 		return;
 
@@ -3316,6 +3297,14 @@ void NifFile::SetColorsForShape(const std::string& shapeName, const std::vector<
 			}
 		}
 	}
+}
+
+void NifFile::SetColorsForShape(const std::string& shapeName, const std::vector<Color4>& colors) {
+	auto shape = FindBlockByName<NiShape>(shapeName);
+	if (!shape)
+		return;
+
+	SetColorsForShape(shape, colors);
 }
 
 void NifFile::SetTangentsForShape(NiShape* shape, const std::vector<Vector3>& tangents) {

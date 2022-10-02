@@ -16,6 +16,7 @@ Created with a clean-room design.
   - Fallout: New Vegas
   - Fallout 4
   - Fallout 4 VR
+  - The Elder Scrolls IV: Oblivion (not tested a whole lot)
   - The Elder Scrolls V: Skyrim
   - The Elder Scrolls V: Skyrim Special Edition
   - The Elder Scrolls V: Skyrim VR

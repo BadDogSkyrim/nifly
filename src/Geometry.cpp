@@ -425,6 +425,7 @@ bool NiShape::ReorderTriangles(const std::vector<uint32_t>& triInds) {
 
 
 BSTriShape::BSTriShape() {
+	flags = 14;
 	vertexDesc.SetFlag(VF_VERTEX);
 	vertexDesc.SetFlag(VF_UV);
 	vertexDesc.SetFlag(VF_NORMAL);
@@ -880,8 +881,7 @@ static void CalculateNormals(const std::vector<Vector3>& verts,
 
 	// Face normals
 	for (const Triangle& t : tris) {
-		Vector3 tn;
-		t.trinormal(verts, &tn);
+		Vector3 tn = t.trinormal(verts);
 		norms[t.p1] += tn;
 		norms[t.p2] += tn;
 		norms[t.p3] += tn;
@@ -1097,8 +1097,6 @@ void BSTriShape::Create(NiVersion& version,
 						const std::vector<Triangle>* tris,
 						const std::vector<Vector2>* uvs,
 						const std::vector<Vector3>* normals) {
-	flags = 14;
-
 	constexpr uint16_t maxVertIndex = std::numeric_limits<uint16_t>::max();
 	size_t vertCount = verts->size();
 	if (vertCount > static_cast<size_t>(maxVertIndex))
@@ -1379,14 +1377,12 @@ void BSSubIndexTriShape::SetSegmentation(const NifSegmentationInfo& inf, const s
 	int newPartID = 0;
 	std::vector<int> oldToNewPartIDs;
 	for (const NifSegmentInfo& seg : inf.segs) {
-		auto oldToNewSize = static_cast<int>(oldToNewPartIDs.size());
-		if (seg.partID >= oldToNewSize)
+		if (seg.partID >= static_cast<int>(oldToNewPartIDs.size()))
 			oldToNewPartIDs.resize(seg.partID + 1);
-
 		oldToNewPartIDs[seg.partID] = newPartID++;
+
 		for (const NifSubSegmentInfo& sub : seg.subs) {
-			oldToNewSize = static_cast<int>(oldToNewPartIDs.size());
-			if (sub.partID >= oldToNewSize)
+			if (sub.partID >= static_cast<int>(oldToNewPartIDs.size()))
 				oldToNewPartIDs.resize(sub.partID + 1);
 			oldToNewPartIDs[sub.partID] = newPartID++;
 		}
@@ -1394,10 +1390,10 @@ void BSSubIndexTriShape::SetSegmentation(const NifSegmentationInfo& inf, const s
 
 	std::vector<int> triParts(numTris);
 	for (uint32_t i = 0; i < numTris; ++i)
-		if (triParts[i] >= 0)
+		if (inTriParts[i] >= 0)
 			triParts[i] = oldToNewPartIDs[inTriParts[i]];
 
-	// Sort triangles by partition ID
+	// Sort triangles (via index) by partition ID
 	std::vector<uint32_t> triInds(numTris);
 	for (uint32_t i = 0; i < numTris; ++i)
 		triInds[i] = i;
@@ -1408,6 +1404,8 @@ void BSSubIndexTriShape::SetSegmentation(const NifSegmentationInfo& inf, const s
 
 	ReorderTriangles(triInds);
 	// Note that triPart's indexing no longer matches triangle indexing.
+	// triParts uses the old indexing.  triInds maps from new indexing to old.
+	// So triParts[triInds[i]] is now the partition number of triangle i.
 
 	// Find first triangle of each partition
 	int j = 0;
