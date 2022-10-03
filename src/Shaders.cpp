@@ -320,6 +320,10 @@ float BSShaderProperty::GetEnvironmentMapScale() const {
 	return environmentMapScale;
 }
 
+void BSShaderProperty::SetEnvironmentMapScale(const float ems) {
+	environmentMapScale = ems;
+}
+
 Vector2 BSShaderProperty::GetUVOffset() const {
 	return uvOffset;
 }

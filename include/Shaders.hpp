@@ -301,6 +301,7 @@ public:
 	virtual float GetGlossiness() const { return 0.0f; }
 	virtual void SetGlossiness(const float) {}
 	virtual float GetEnvironmentMapScale() const { return 0.0f; }
+	virtual void SetEnvironmentMapScale(const float) {}
 	virtual Color4 GetEmissiveColor() const { return Color4(); }
 	virtual void SetEmissiveColor(const Color4&) {}
 	virtual float GetEmissiveMultiple() const { return 0.0f; }
@@ -356,6 +357,7 @@ public:
 	bool HasGreyscaleColor() const override;
 	bool HasEnvironmentMapping() const override;
 	float GetEnvironmentMapScale() const override;
+	void SetEnvironmentMapScale(const float ems) override;
 	Vector2 GetUVOffset() const override;
 	Vector2 GetUVScale() const override;
 };
