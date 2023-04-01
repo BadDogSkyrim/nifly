@@ -1,39 +1,23 @@
 #define CATCH_CONFIG_MAIN
 
+#include "TestNifFile.hpp"
+#include "TestUtil.hpp"
+
 #include <catch2/catch.hpp>
 
 #include <NifFile.hpp>
 
 using namespace nifly;
 
-bool CompareBinaryFiles(const std::filesystem::path& fileName1, const std::filesystem::path& fileName2) {
-	// Open file streams at the end of each file
-	std::ifstream fileStream1(fileName1, std::ifstream::ate | std::ifstream::binary);
-	std::ifstream fileStream2(fileName2, std::ifstream::ate | std::ifstream::binary);
-
-	// Compare file size to start with
-	if (fileStream1.tellg() != fileStream2.tellg())
-		return false;
-
-	// Rewind to the beginning of each stream
-	fileStream1.seekg(0);
-	fileStream2.seekg(0);
-
-	std::istreambuf_iterator<char> fileBegin1(fileStream1);
-	std::istreambuf_iterator<char> fileBegin2(fileStream2);
-
-	// Compare binary contents
-	return std::equal(fileBegin1, std::istreambuf_iterator<char>(), fileBegin2);
-}
-
 const std::string nifSuffix = ".nif";
-const std::string nifSuffixOutput = "_output" + nifSuffix;
-const std::string nifSuffixExpected = "_expected" + nifSuffix;
+const std::string folderInput = "input";
+const std::string folderOutput = "output";
+const std::string folderExpected = "expected";
 
 std::tuple<std::string, std::string, std::string> GetNifFileTuple(const char* fileName) {
-	std::string fileInput = fileName + nifSuffix;
-	std::string fileOutput = fileName + nifSuffixOutput;
-	std::string fileExpected = fileName + nifSuffixExpected;
+	std::string fileInput = folderInput + "/" + fileName + nifSuffix;
+	std::string fileOutput = folderOutput + "/" +  + fileName + nifSuffix;
+	std::string fileExpected = folderExpected + "/" +  + fileName + nifSuffix;
 	return std::make_tuple(fileInput, fileOutput, fileExpected);
 }
 
@@ -113,6 +97,17 @@ TEST_CASE("Load and save skinned file (SE)", "[NifFile]") {
 TEST_CASE("Load and save skinned, dynamic file (SE)", "[NifFile]") {
 	constexpr auto fileName = "TestNifFile_Skinned_Dynamic_SE";
 	const auto[fileInput, fileOutput, fileExpected] = GetNifFileTuple(fileName);
+
+	NifFile nif;
+	REQUIRE(nif.Load(fileInput) == 0);
+	REQUIRE(nif.Save(fileOutput) == 0);
+
+	REQUIRE(CompareBinaryFiles(fileOutput, fileExpected));
+}
+
+TEST_CASE("Load and save file without weights in NiSkinData", "[NifFile]") {
+	constexpr auto fileName = "TestNifFile_Skinned_NoNiSkinDataWeights";
+	const auto [fileInput, fileOutput, fileExpected] = GetNifFileTuple(fileName);
 
 	NifFile nif;
 	REQUIRE(nif.Load(fileInput) == 0);
@@ -280,6 +275,54 @@ TEST_CASE("Load and save file (FO76)", "[NifFile]") {
 
 	NifFile nif;
 	REQUIRE(nif.Load(fileInput) == 0);
+	REQUIRE(nif.Save(fileOutput) == 0);
+
+	REQUIRE(CompareBinaryFiles(fileOutput, fileExpected));
+}
+
+TEST_CASE("FixBSXFlags (remove external emittance)", "[NifFile]") {
+	constexpr auto fileName = "TestNifFile_FixBSXFlags_RemoveExtEmit";
+	const auto [fileInput, fileOutput, fileExpected] = GetNifFileTuple(fileName);
+
+	NifFile nif;
+	REQUIRE(nif.Load(fileInput) == 0);
+	nif.FixBSXFlags();
+	REQUIRE(nif.Save(fileOutput) == 0);
+
+	REQUIRE(CompareBinaryFiles(fileOutput, fileExpected));
+}
+
+TEST_CASE("FixBSXFlags (add external emittance)", "[NifFile]") {
+	constexpr auto fileName = "TestNifFile_FixBSXFlags_AddExtEmit";
+	const auto [fileInput, fileOutput, fileExpected] = GetNifFileTuple(fileName);
+
+	NifFile nif;
+	REQUIRE(nif.Load(fileInput) == 0);
+	nif.FixBSXFlags();
+	REQUIRE(nif.Save(fileOutput) == 0);
+
+	REQUIRE(CompareBinaryFiles(fileOutput, fileExpected));
+}
+
+TEST_CASE("FixShaderFlags (remove environment mapping)", "[NifFile]") {
+	constexpr auto fileName = "TestNifFile_FixShaderFlags_RemoveEnvMap";
+	const auto [fileInput, fileOutput, fileExpected] = GetNifFileTuple(fileName);
+
+	NifFile nif;
+	REQUIRE(nif.Load(fileInput) == 0);
+	nif.FixShaderFlags();
+	REQUIRE(nif.Save(fileOutput) == 0);
+
+	REQUIRE(CompareBinaryFiles(fileOutput, fileExpected));
+}
+
+TEST_CASE("FixShaderFlags (add environment mapping)", "[NifFile]") {
+	constexpr auto fileName = "TestNifFile_FixShaderFlags_AddEnvMap";
+	const auto [fileInput, fileOutput, fileExpected] = GetNifFileTuple(fileName);
+
+	NifFile nif;
+	REQUIRE(nif.Load(fileInput) == 0);
+	nif.FixShaderFlags();
 	REQUIRE(nif.Save(fileOutput) == 0);
 
 	REQUIRE(CompareBinaryFiles(fileOutput, fileExpected));
