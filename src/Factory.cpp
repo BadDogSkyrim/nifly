@@ -33,6 +33,8 @@ NiFactoryRegister::NiFactoryRegister() {
 	RegisterFactory<BSDebrisNode>();
 	RegisterFactory<BSBlastNode>();
 	RegisterFactory<BSDamageStage>();
+	RegisterFactory<BSWeakReferenceNode>();
+	RegisterFactory<BSFaceGenNiNode>();
 	RegisterFactory<NiBone>();
 	RegisterFactory<NiSortAdjustNode>();
 	RegisterFactory<NiRangeLODData>();
@@ -67,12 +69,15 @@ NiFactoryRegister::NiFactoryRegister() {
 	RegisterFactory<BSSubIndexTriShape>();
 	RegisterFactory<BSMeshLODTriShape>();
 	RegisterFactory<BSDynamicTriShape>();
+	RegisterFactory<BSGeometry>();
 	RegisterFactory<NiSkinInstance>();
 	RegisterFactory<BSDismemberSkinInstance>();
 	RegisterFactory<NiSkinData>();
 	RegisterFactory<NiSkinPartition>();
 	RegisterFactory<BSSkinInstance>();
 	RegisterFactory<BSSkinBoneData>();
+	RegisterFactory<SkinAttach>();
+	RegisterFactory<BoneTranslations>();
 	RegisterFactory<NiShadeProperty>();
 	RegisterFactory<NiSpecularProperty>();
 	RegisterFactory<NiTexturingProperty>();

@@ -209,7 +209,7 @@ int NifFile::Load(std::istream& file, const NifLoadOptions& options) {
 		}
 
 		NiVersion& version = hdr.GetVersion();
-		if (!(version.IsOB() || version.IsFO3() || version.IsSK() || version.IsSSE() || version.IsFO4() || version.IsFO76() || version.IsSpecial())) {
+		if (!(version.IsOB() || version.IsFO3() || version.IsSK() || version.IsSSE() || version.IsFO4() || version.IsFO76() || version.IsSF() || version.IsSpecial())) {
 			// Unsupported file version
 			Clear();
 			return 2;
@@ -1228,6 +1228,8 @@ void NifFile::CloneChildren(NiObject* block, NifFile* srcNif) {
 				auto destChildS = srcChild->Clone();
 				auto destChild = destChildS.get();
 				uint32_t destId = hdr.AddBlock(std::move(destChildS));
+
+				uint32_t oldId = r->index;
 				r->index = destId;
 
 				std::vector<NiStringRef*> strRefs;
@@ -1249,7 +1251,7 @@ void NifFile::CloneChildren(NiObject* block, NifFile* srcNif) {
 					cloneBlock(destChild, parentOldId, parentNewId);
 				}
 				else
-					cloneBlock(destChild, r->index, destId);
+					cloneBlock(destChild, oldId, destId);
 			}
 		}
 	};
@@ -1784,6 +1786,11 @@ OptResult NifFile::OptimizeFor(OptOptions& options) {
 					if (removeVertexColors) {
 						bslsp->SetVertexColors(false);
 						bslsp->SetVertexAlpha(false);
+					}
+
+					// this flag breaks LE headparts
+					if (options.headParts) {
+						bslsp->shaderFlags2 &= ~SLSF2_PACKED_TANGENT;
 					}
 
 					if (options.removeParallax) {
@@ -3072,6 +3079,10 @@ const std::vector<Vector2>* NifFile::GetUvsForShape(NiShape* shape) {
 
 const std::vector<Color4>* NifFile::GetColorsForShape(const std::string& shapeName) {
 	auto shape = FindBlockByName<NiShape>(shapeName);
+	return GetColorsForShape(shape);
+}
+
+const std::vector<Color4>* NifFile::GetColorsForShape(NiShape* shape) {
 	if (!shape)
 		return nullptr;
 
@@ -4359,7 +4370,7 @@ void NifFile::UpdateSkinPartitions(NiShape* shape) {
 		part.bones.reserve(part.numBones);
 
 		for (auto& b : partBones[partInd]) {
-			part.bones.push_back(b);
+			part.bones.push_back(static_cast<uint16_t>(b));
 			boneLookup[b] = static_cast<uint8_t>(part.bones.size() - 1);
 		}
 
