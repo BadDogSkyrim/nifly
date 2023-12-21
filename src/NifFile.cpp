@@ -2463,7 +2463,8 @@ uint32_t NifFile::GetShapeBoneWeights(NiShape* shape,
 		for (uint16_t vid = 0; vid < bsTriShape->GetNumVertices(); vid++) {
 			auto& vertex = bsTriShape->vertData[vid];
 			for (size_t i = 0; i < 4; i++) {
-				if (vertex.weightBones[i] == boneIndex && vertex.weights[i] != 0.0f)
+				/* pyNifly takes out check for 0 weights and returns everything. Not sure why. */
+				if (vertex.weightBones[i] == boneIndex /* && vertex.weights[i] != 0.0f */)
 					outWeights.emplace(vid, vertex.weights[i]);
 			}
 		}
