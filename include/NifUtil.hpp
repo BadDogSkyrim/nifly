@@ -5,6 +5,7 @@ See the included GPLv3 LICENSE file
 */
 
 #pragma once
+#pragma warning(disable : 4996) // Using some depreciated overrides
 
 #include "Object3d.hpp"
 
