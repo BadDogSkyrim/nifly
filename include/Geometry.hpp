@@ -678,6 +678,17 @@ public:
 		return &meshes.back();
 	}
 
+	// Set the block-level bounding volumes the engine frustum/distance-culls STATIC shapes by.
+	// These are the BSGeometry's own `bounds`/`boundMinMax` members (written by Sync), which are
+	// distinct from NiShape::SetBounds (that one targets the geometry data, not this block). A
+	// zero bound leaves a static invisible in-game and in the CK. Values are in metric (.mesh)
+	// space. boundMinMax = { centre.xyz, half-extents.xyz } per vanilla assets.
+	void SetGeometryBounds(const BoundingSphere& bs, const float minmax[6]) {
+		bounds = bs;
+		for (int i = 0; i < 6; ++i) boundMinMax[i] = minmax[i];
+	}
+	const BoundingSphere& GetGeometryBounds() const { return bounds; }
+
 	bool HasMeshlets() const {
 		for (auto& mesh : meshes) {
 			if(mesh.meshData.HasMeshlets()) {
