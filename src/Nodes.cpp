@@ -9,6 +9,8 @@ See the included GPLv3 LICENSE file
 using namespace nifly;
 
 void NiNode::Sync(NiStreamReversible& stream) {
+	// Old file versions use empty child references as placeholders
+	childRefs.SetKeepEmptyRefs(stream.GetVersion().File() <= V4_2_2_0);
 	childRefs.Sync(stream);
 
 	if (stream.GetVersion().User() <= 12 && stream.GetVersion().Stream() < 130)
@@ -153,11 +155,17 @@ void BSWeakReference::Sync(NiStreamReversible& stream) {
 
 	stream.Sync(resourceID);
 	stream.Sync(numTransforms);
+	if (numTransforms > NIF_ARRAY_SIZE_LIMIT)
+		throw std::length_error("IO: Array size is too large.");
+
 	transforms.resize(numTransforms);
 	for (uint32_t i = 0; i < numTransforms; i++)
 		stream.Sync(transforms[i]);
 
 	stream.Sync(numMaterials);
+	if (numMaterials > NIF_ARRAY_SIZE_LIMIT)
+		throw std::length_error("IO: Array size is too large.");
+
 	unkMaterials.resize(numMaterials);
 	for (uint32_t i = 0; i < numMaterials; i++)
 		unkMaterials[i].Sync(stream);
@@ -165,12 +173,18 @@ void BSWeakReference::Sync(NiStreamReversible& stream) {
 
 void BSWeakReferenceNode::Sync(NiStreamReversible& stream) {
 	stream.Sync(numWeakRefs);
+	if (numWeakRefs > NIF_ARRAY_SIZE_LIMIT)
+		throw std::length_error("IO: Array size is too large.");
+
 	weakRefs.resize(numWeakRefs);
 	for (uint32_t i = 0; i < numWeakRefs; i++)
 		weakRefs[i].Sync(stream);
 
 	stream.Sync(unkInt1);
 	stream.Sync(numWaterRefs);
+	if (numWaterRefs > NIF_ARRAY_SIZE_LIMIT)
+		throw std::length_error("IO: Array size is too large.");
+
 	waterRefs.resize(numWaterRefs);
 	for (uint32_t i = 0; i < numWaterRefs; i++)
 		waterRefs[i].Sync(stream);
@@ -183,7 +197,9 @@ void BSFaceGenNiNode::Sync(NiStreamReversible& stream) {
 
 
 void NiBillboardNode::Sync(NiStreamReversible& stream) {
-	stream.Sync(billboardMode);
+	// Older file versions store the billboard mode in the NiAVObject flags
+	if (stream.GetVersion().File() >= NiFileVersion::V10_1_0_0)
+		stream.Sync(billboardMode);
 }
 
 

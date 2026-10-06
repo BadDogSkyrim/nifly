@@ -30,6 +30,34 @@ public:
 	const char* GetBlockName() override { return BlockName; }
 };
 
+// Morrowind only, marks a node holding the collision mesh
+class RootCollisionNode : public NiCloneable<RootCollisionNode, NiNode> {
+public:
+	static constexpr const char* BlockName = "RootCollisionNode";
+	const char* GetBlockName() override { return BlockName; }
+};
+
+// Morrowind only, marks a node that NPCs try to avoid
+class AvoidNode : public NiCloneable<AvoidNode, NiNode> {
+public:
+	static constexpr const char* BlockName = "AvoidNode";
+	const char* GetBlockName() override { return BlockName; }
+};
+
+// Bethesda extension of NiNode with animation properties stored in the flags
+class NiBSAnimationNode : public NiCloneable<NiBSAnimationNode, NiNode> {
+public:
+	static constexpr const char* BlockName = "NiBSAnimationNode";
+	const char* GetBlockName() override { return BlockName; }
+};
+
+// Bethesda extension of NiNode used together with NiBSPArrayController
+class NiBSParticleNode : public NiCloneable<NiBSParticleNode, NiNode> {
+public:
+	static constexpr const char* BlockName = "NiBSParticleNode";
+	const char* GetBlockName() override { return BlockName; }
+};
+
 enum BSValueNodeFlags : uint8_t {
 	BSVN_NONE = 0x0,
 	BSVN_BILLBOARD_WORLD_Z = 0x1,
@@ -151,7 +179,7 @@ public:
 
 struct BSResourceID {
     uint32_t fileHash = 0;
-    char extension[4];
+    char extension[4]{};
     uint32_t dirHash = 0;
 };
 
@@ -250,7 +278,7 @@ struct BSWeakReference {
 	uint32_t numTransforms = 0;
 	std::vector<Matrix4> transforms;
 
-	uint32_t numMaterials;
+	uint32_t numMaterials = 0;
 	std::vector<UnkMaterialStruct> unkMaterials;
 
 	void Sync(NiStreamReversible& stream);

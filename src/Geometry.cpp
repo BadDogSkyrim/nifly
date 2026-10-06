@@ -44,7 +44,7 @@ void NiGeometryData::Sync(NiStreamReversible& stream) {
 		stream.Sync(compressFlags);
 	}
 
-	stream.Sync(hasVertices);
+	hasVertices.Sync(stream);
 
 	if (hasVertices && (!isPSys || stream.GetVersion().File() < V20_2_0_7)) {
 		vertices.resize(numVertices);
@@ -60,21 +60,18 @@ void NiGeometryData::Sync(NiStreamReversible& stream) {
 		stream.Sync(dataFlags);
 
 	uint16_t nbtMethod = dataFlags & 0xF000;
-	uint8_t numTextureSets = dataFlags & 0x3F;
-	if (stream.GetVersion().Stream() >= 34)
-		numTextureSets = dataFlags & 0x1;
 
 	if (stream.GetVersion().File() == NiFileVersion::V20_2_0_7 && stream.GetVersion().Stream() > 34)
 		stream.Sync(materialCRC);
 
-	stream.Sync(hasNormals);
+	hasNormals.Sync(stream);
 	if (hasNormals && (!isPSys || stream.GetVersion().File() < V20_2_0_7)) {
 		normals.resize(numVertices);
 
 		for (uint16_t i = 0; i < numVertices; i++)
 			stream.Sync(normals[i]);
 
-		if (nbtMethod) {
+		if (nbtMethod && stream.GetVersion().File() >= NiFileVersion::V10_1_0_0) {
 			tangents.resize(numVertices);
 			bitangents.resize(numVertices);
 
@@ -88,12 +85,23 @@ void NiGeometryData::Sync(NiStreamReversible& stream) {
 
 	stream.Sync(bounds);
 
-	stream.Sync(hasVertexColors);
+	hasVertexColors.Sync(stream);
 	if (hasVertexColors && (!isPSys || stream.GetVersion().File() < V20_2_0_7)) {
 		vertexColors.resize(numVertices);
 		for (uint16_t i = 0; i < numVertices; i++)
 			stream.Sync(vertexColors[i]);
 	}
+
+	// Old file versions store the data flags behind the vertex colors
+	if (stream.GetVersion().File() <= NiFileVersion::V4_2_2_0)
+		stream.Sync(dataFlags);
+
+	if (stream.GetVersion().File() <= NiFileVersion::V4_0_0_2)
+		hasUV.Sync(stream);
+
+	uint8_t numTextureSets = dataFlags & 0x3F;
+	if (stream.GetVersion().Stream() >= 34)
+		numTextureSets = dataFlags & 0x1;
 
 	if (numTextureSets > 0 && (!isPSys || stream.GetVersion().File() < V20_2_0_7)) {
 		uvSets.resize(numTextureSets);
@@ -104,7 +112,8 @@ void NiGeometryData::Sync(NiStreamReversible& stream) {
 		}
 	}
 
-	stream.Sync(consistencyFlags);
+	if (stream.GetVersion().File() >= NiFileVersion::V10_0_1_0)
+		stream.Sync(consistencyFlags);
 
 	if (stream.GetVersion().File() >= NiFileVersion::V20_0_0_4)
 		additionalDataRef.Sync(stream);
@@ -159,6 +168,8 @@ void NiGeometryData::SetVertexColors(const bool enable) {
 }
 
 void NiGeometryData::SetUVs(const bool enable) {
+	hasUV = enable;
+
 	if (enable) {
 		dataFlags |= 1 << 0;
 		uvSets.resize(1);
@@ -189,7 +200,7 @@ uint32_t NiGeometryData::GetNumTriangles() const {
 bool NiGeometryData::GetTriangles(std::vector<Triangle>&) const {
 	return false;
 }
-void NiGeometryData::SetTriangles(const std::vector<Triangle>&){};
+void NiGeometryData::SetTriangles(const std::vector<Triangle>&) {};
 
 void NiGeometryData::UpdateBounds() {
 	bounds = BoundingSphere(vertices);
@@ -343,7 +354,7 @@ bool NiShape::HasVertexColors() const {
 	return false;
 };
 
-void NiShape::SetSkinned(const bool){};
+void NiShape::SetSkinned(const bool) {};
 bool NiShape::IsSkinned() const {
 	return false;
 };
@@ -899,7 +910,11 @@ static void CalculateNormals(const std::vector<Vector3>& verts,
 	norms.resize(verts.size());
 
 	// Face normals
+	const size_t numVerts = verts.size();
 	for (const Triangle& t : tris) {
+		if (t.p1 >= numVerts || t.p2 >= numVerts || t.p3 >= numVerts)
+			continue;
+
 		Vector3 tn = t.trinormal(verts);
 		norms[t.p1] += tn;
 		norms[t.p2] += tn;
@@ -1397,10 +1412,14 @@ void BSSubIndexTriShape::GetSegmentation(NifSegmentationInfo& inf, std::vector<i
 			inf.segs[i].subs[j].partID = partID++;
 			arrayIndex++;
 
-			const BSSITSSubSegmentDataRecord& rec = segmentation.subSegmentData.dataRecords[arrayIndex];
-			inf.segs[i].subs[j].userSlotID = rec.userSlotID < 30 ? 0 : rec.userSlotID;
-			inf.segs[i].subs[j].material = rec.material;
-			inf.segs[i].subs[j].extraData = rec.extraData;
+			// Data records are only present in the file if numSegments < numTotalSegments
+			const auto& dataRecords = segmentation.subSegmentData.dataRecords;
+			if (static_cast<size_t>(arrayIndex) < dataRecords.size()) {
+				const BSSITSSubSegmentDataRecord& rec = dataRecords[arrayIndex];
+				inf.segs[i].subs[j].userSlotID = rec.userSlotID < 30 ? 0 : rec.userSlotID;
+				inf.segs[i].subs[j].material = rec.material;
+				inf.segs[i].subs[j].extraData = rec.extraData;
+			}
 		}
 		arrayIndex++;
 	}
@@ -1752,6 +1771,54 @@ void BSGeometryMeshData::Sync(NiStreamReversible& stream) {
 	}
 }
 
+void BSGeometryMeshData::notifyVerticesDelete(const std::vector<uint16_t>& vertIndices) {
+	if (vertIndices.empty()) {
+		return;
+	}
+
+	std::vector<int> indexCollapse = GenerateIndexCollapseMap(vertIndices, vertices.size());
+
+	// Base handles vertices, normals, tangents and uvSets
+	NiGeometryData::notifyVerticesDelete(vertIndices);
+	nVertices = static_cast<uint32_t>(vertices.size());
+	nNormals = static_cast<uint32_t>(normals.size());
+	nTangents = static_cast<uint32_t>(tangents.size());
+	nUV1 = uvSets.size() > 0 ? static_cast<uint32_t>(uvSets[0].size()) : 0;
+	nUV2 = uvSets.size() > 1 ? static_cast<uint32_t>(uvSets[1].size()) : 0;
+
+	//Erase Starfield specific per-vertex arrays (vColors, tangentWs, skinWeights)
+	EraseVectorIndices(vColors, vertIndices);
+	nColors = static_cast<uint32_t>(vColors.size());
+
+	EraseVectorIndices(tangentWs, vertIndices);
+
+	EraseVectorIndices(skinWeights, vertIndices);
+	nTotalWeights = 0;
+	for (auto& vw : skinWeights) {
+		nTotalWeights += static_cast<uint32_t>(vw.size());
+	}
+
+	// Remap the main triangle list with the index collapse map
+	ApplyMapToTriangles(tris, indexCollapse);
+	nTriIndices = static_cast<uint32_t>(tris.size()) * 3;
+
+	//Also need to remap all lod triangle lists
+	for (auto& lod : lods) {
+		ApplyMapToTriangles(lod, indexCollapse);
+	}
+
+	// Need to rebuild Meshlets and cull data (if had any)
+	bool hadMeshlets = !meshletList.empty();
+	meshletList.clear();
+	cullDataList.clear();
+	nMeshlets = 0;
+	nCullData = 0;
+
+	if (hadMeshlets) {
+		GenerateMeshlets();
+	}
+}
+
 void BSGeometryMeshData::GenerateMeshlets(uint32_t maxVerts, uint32_t maxPrims) {
 	meshletList.clear();
 	cullDataList.clear();
@@ -1768,9 +1835,9 @@ void BSGeometryMeshData::GenerateMeshlets(uint32_t maxVerts, uint32_t maxPrims) 
 	if (maxPrims < 1)
 		maxPrims = 1;
 
-	uint32_t startTri = 0;             // first triangle of the meshlet being built
-	uint32_t vertOffsetAccum = 0;      // running sum of emitted vertCounts (= vertOffset)
-	std::unordered_set<uint16_t> cur;  // distinct vertices in the meshlet being built
+	uint32_t startTri = 0;			  // first triangle of the meshlet being built
+	uint32_t vertOffsetAccum = 0;	  // running sum of emitted vertCounts (= vertOffset)
+	std::unordered_set<uint16_t> cur; // distinct vertices in the meshlet being built
 
 	auto flush = [&](uint32_t endTri) {
 		if (endTri <= startTri)
@@ -1780,7 +1847,7 @@ void BSGeometryMeshData::GenerateMeshlets(uint32_t maxVerts, uint32_t maxPrims) 
 		m.vertCount = static_cast<uint32_t>(cur.size());
 		m.vertOffset = vertOffsetAccum;
 		m.primCount = endTri - startTri;
-		m.primOffset = startTri;   // primOffset is in TRIANGLE units (matches vanilla SF meshlets)
+		m.primOffset = startTri; // primOffset is in TRIANGLE units (matches vanilla SF meshlets)
 		meshletList.push_back(m);
 		vertOffsetAccum += m.vertCount;
 
@@ -1880,8 +1947,12 @@ void BSGeometry::Sync(NiStreamReversible& stream) {
 				BSGeometryMesh mesh{};
 				meshes.push_back(mesh);
 			}
-			meshes[i].internalGeom = internal;
-			meshes[i].Sync(stream);
+
+			// While reading, use the last added mesh instead of indexing with "i".
+			// The file data can have gaps in the mesh presence bytes.
+			auto& mesh = stream.GetMode() == NiStreamReversible::Mode::Reading ? meshes.back() : meshes[i];
+			mesh.internalGeom = internal;
+			mesh.Sync(stream);
 		}
 	}
 }
@@ -1906,7 +1977,7 @@ void BSGeometry::GetChildIndices(std::vector<uint32_t>& indices) {
 NiGeometryData* BSGeometry::GetGeomData() const {
 	if (meshes.size() > selectedMesh) {
 		// Breaking const correctness here to cast to the desired level of the class heirarchy.
-		//   Perhaps NiShape GetGeomData should return a const* or it shouldn't be a const function? 
+		//   Perhaps NiShape GetGeomData should return a const* or it shouldn't be a const function?
 		return dynamic_cast<NiGeometryData*>(const_cast<BSGeometryMeshData*>(&meshes[selectedMesh].meshData));
 	}
 	return nullptr;
@@ -1929,7 +2000,8 @@ void BSGeometry::SetTriangles(const std::vector<Triangle>& tris) {
 		// Detect whether the triangle topology actually changes.
 		bool changed = meshData.tris.size() != tris.size();
 		for (size_t i = 0; !changed && i < tris.size(); ++i) {
-			changed = meshData.tris[i].p1 != tris[i].p1 || meshData.tris[i].p2 != tris[i].p2 || meshData.tris[i].p3 != tris[i].p3;
+			changed = meshData.tris[i].p1 != tris[i].p1 || meshData.tris[i].p2 != tris[i].p2
+					  || meshData.tris[i].p3 != tris[i].p3;
 		}
 
 		meshData.tris = tris;
@@ -1945,7 +2017,9 @@ void BSGeometry::SetTriangles(const std::vector<Triangle>& tris) {
 
 void NiGeometry::Sync(NiStreamReversible& stream) {
 	dataRef.Sync(stream);
-	skinInstanceRef.Sync(stream);
+
+	if (stream.GetVersion().File() >= V3_3_0_13)
+		skinInstanceRef.Sync(stream);
 
 	if (stream.GetVersion().File() >= V20_2_0_5) {
 		uint32_t numMaterials = materialNames.Sync(stream);
@@ -1953,7 +2027,7 @@ void NiGeometry::Sync(NiStreamReversible& stream) {
 
 		stream.Sync(activeMaterial);
 	}
-	else {
+	else if (stream.GetVersion().File() >= V10_0_1_0) {
 		stream.Sync(shader);
 
 		if (shader) {
@@ -2028,13 +2102,20 @@ void NiTriBasedGeomData::Create(NiVersion& version,
 
 void NiTriShapeData::Sync(NiStreamReversible& stream) {
 	stream.Sync(numTrianglePoints);
-	stream.Sync(hasTriangles);
+
+	if (stream.GetVersion().File() >= NiFileVersion::V10_1_0_0)
+		stream.Sync(hasTriangles);
+	else
+		hasTriangles = true; // Triangle data is always present before that version
 
 	if (hasTriangles) {
 		triangles.resize(numTriangles);
 		for (uint32_t i = 0; i < numTriangles; i++)
 			stream.Sync(triangles[i]);
 	}
+
+	if (stream.GetMode() == NiStreamReversible::Mode::Writing)
+		numMatchGroups = static_cast<uint16_t>(matchGroups.size());
 
 	stream.Sync(numMatchGroups);
 	matchGroups.resize(numMatchGroups);
@@ -2048,10 +2129,6 @@ void NiTriShapeData::Sync(NiStreamReversible& stream) {
 		for (uint32_t j = 0; j < mg.count; j++)
 			stream.Sync(mg.matches[j]);
 	}
-
-	// Not supported yet, so clear it again after reading
-	matchGroups.clear();
-	numMatchGroups = 0;
 }
 
 void NiTriShapeData::Create(NiVersion& version,
@@ -2087,6 +2164,10 @@ void NiTriShapeData::notifyVerticesDelete(const std::vector<uint16_t>& vertIndic
 	ApplyMapToTriangles(triangles, indexCollapse);
 	numTriangles = static_cast<uint16_t>(triangles.size());
 	numTrianglePoints = 3 * numTriangles;
+
+	// Shared normals reference deleted vertices, updating them isn't supported
+	matchGroups.clear();
+	numMatchGroups = 0;
 
 	NiTriBasedGeomData::notifyVerticesDelete(vertIndices);
 }
@@ -2252,13 +2333,14 @@ void NiTriStripsData::notifyVerticesDelete(const std::vector<uint16_t>& vertIndi
 	// This is not a healthy way to delete strip data. Probably need to restrip the shape.
 	for (uint16_t i = 0; i < stripsInfo.stripLengths.size(); i++) {
 		for (uint16_t j = 0; j < stripsInfo.stripLengths[i]; j++) {
-			if (indexCollapse[stripsInfo.points[i][j]] == -1) {
+			uint16_t p = stripsInfo.points[i][j];
+			if (p >= indexCollapse.size() || indexCollapse[p] == -1) {
 				stripsInfo.points[i].erase(stripsInfo.points[i].begin() + j);
 				stripsInfo.stripLengths[i]--;
 				--j;
 			}
 			else
-				stripsInfo.points[i][j] = static_cast<uint16_t>(indexCollapse[stripsInfo.points[i][j]]);
+				stripsInfo.points[i][j] = static_cast<uint16_t>(indexCollapse[p]);
 		}
 	}
 
@@ -2397,7 +2479,7 @@ void NiTriStrips::SetGeomData(NiGeometryData* geomDataPtr) {
 void NiLinesData::Sync(NiStreamReversible& stream) {
 	lineFlags.resize(numVertices);
 	for (uint16_t i = 0; i < numVertices; i++)
-		stream.Sync(lineFlags[i]);
+		lineFlags[i].Sync(stream);
 }
 
 void NiLinesData::notifyVerticesDelete(const std::vector<uint16_t>& vertIndices) {
